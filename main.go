@@ -11,7 +11,7 @@ import (
 )
 
 type User struct {
-	ID        string `json:"id"`
+	ID        int    `json:"id"`
 	Name      string `json:"name"`
 	Email     string `json:"email"`
 	CreatedAt string `json:"created_at"`
@@ -41,6 +41,8 @@ func main() {
 	// inisialisasi router
 
 	router.HandleFunc("/users", getUsers).Methods("GET") //menghandel fungsi GET ke path /users dan memanggil fungsi getUsers
+	router.HandleFunc("/users/{id}", getUser).Methods("GET")
+	router.HandleFunc("/user", createUser).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":8000", router))
 	//memulai server di port 8000 dan router sebagai HTTP handler, log.Fatal() akan memberhentikan dan mencetak error apbila ada error
@@ -64,4 +66,44 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		users = append(users, user)
 	}
 	json.NewEncoder(w).Encode(users)
+}
+
+func getUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id := params["id"]
+	var user User
+	err := db.QueryRow("SELECT id, name, email, created_at WHERE id = ?", id).Scan(&user.ID, &user.Name, &user.Email, &user.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, r)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	json.NewEncoder(w).Encode(user)
+}
+
+func createUser(w http.ResponseWriter, r *http.Request) {
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	result, err := db.Exec("INSERT INTO users (name, email) VALUES (?, ?)", user.Name, user.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.ID = int(id)
+	user.CreatedAt = "now" // Placeholder
+	json.NewEncoder(w).Encode(user)
 }
