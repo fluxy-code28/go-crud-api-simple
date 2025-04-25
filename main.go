@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
@@ -43,6 +44,8 @@ func main() {
 	router.HandleFunc("/users", getUsers).Methods("GET") //menghandel fungsi GET ke path /users dan memanggil fungsi getUsers
 	router.HandleFunc("/users/{id}", getUser).Methods("GET")
 	router.HandleFunc("/user", createUser).Methods("POST")
+	router.HandleFunc("/user/{id}", updateUser).Methods("PUT")
+	router.HandleFunc("/user/{id}", deleteUser).Methods("DELETE")
 
 	log.Fatal(http.ListenAndServe(":8000", router))
 	//memulai server di port 8000 dan router sebagai HTTP handler, log.Fatal() akan memberhentikan dan mencetak error apbila ada error
@@ -106,4 +109,44 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	user.ID = int(id)
 	user.CreatedAt = "now" // Placeholder
 	json.NewEncoder(w).Encode(user)
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	idStr := params["id"]
+
+	// Konversi id dari string ke int
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var user User
+	err = json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.Exec("UPDATE users SET name = ?, email = ? WHERE id = ?", user.Name, user.Email, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	user.ID = int(id)
+	user.CreatedAt = "now" // Placeholder
+	json.NewEncoder(w).Encode(user)
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id := params["id"]
+
+	_, err := db.Exec("DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
